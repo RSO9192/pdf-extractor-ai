@@ -1,0 +1,40 @@
+[project]
+name = "pdf-extractor-ai"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Oleh Lokshyn", email = "olokshyn@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "ruff>=0.16.4",
+]
+
+[tool.ruff]
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+extend-select = ["I", "ANN"]
+ignore = ["ANN401"]  # Allow explicitly chosen Any as an escape hatch
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["*.py"]
+markers = [
+    "integration: tests that call external services",
+]
+
+[tool.mypy]
+strict = true
+exclude = ["^notebooks/"]
