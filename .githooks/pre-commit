@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Format, type-check, and run unit tests before each commit.
+#
+# Install (once per clone):
+#   ln -sf ../../.githooks/pre-commit .git/hooks/pre-commit
+
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+if ! command -v uv >/dev/null 2>&1; then
+  export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:${PATH}"
+fi
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "pre-commit: uv is not on PATH" >&2
+  exit 1
+fi
+
+echo "pre-commit: ruff format"
+uv run --frozen ruff format --check .
+
+echo "pre-commit: mypy"
+uv run --frozen mypy
+
+echo "pre-commit: pytest (unit tests)"
+uv run --frozen pytest -m "not integration"
