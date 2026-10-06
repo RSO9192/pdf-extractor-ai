@@ -47,7 +47,8 @@ class VisualLanguageModel(Protocol):
 class _SectionJob:
     title: str
     text: str
-    pictures: list[tuple[PictureItem, SectionVisual]]
+    pictures: list[PictureItem]
+    index: int
 
 
 def _page_no(item: NodeItem) -> int | None:
@@ -96,27 +97,15 @@ def _collect(document: DoclingDocument) -> list[_SectionJob]:
             elif isinstance(child, TextItem) and (child.text or "").strip():
                 texts.append(child.text)
         if pictures:
-            visuals: list[tuple[PictureItem, SectionVisual]] = []
-            for picture in pictures:
-                image = picture.get_image(document)
-                if image is None:
-                    continue
-                visual_id = f"s{len(jobs)}-v{len(visuals)}"
-                visuals.append(
-                    (
-                        picture,
-                        SectionVisual(
-                            visual_id=visual_id,
-                            png_bytes=_png_bytes(image),
-                            caption=_caption(picture, document),
-                            page=_page_no(picture),
-                            bbox=format_bbox(picture, document),
-                        ),
-                    )
-                )
-            if visuals:
+            section_text = "\n\n".join(texts)
+            for start in range(0, len(pictures), 4):
                 jobs.append(
-                    _SectionJob(title=title, text="\n\n".join(texts), pictures=visuals)
+                    _SectionJob(
+                        title=title,
+                        text=section_text,
+                        pictures=pictures[start : start + 4],
+                        index=len(jobs),
+                    )
                 )
         for heading in nested:
             visit(heading, (heading.text or "").strip())
@@ -195,36 +184,58 @@ async def summarize_images(
     The input document is not modified. A missing summary or a model error leaves
     that picture in place.
     """
-    jobs = _collect(document)
-    semaphore = asyncio.Semaphore(concurrency)
+    if concurrency < 1:
+        raise ValueError("concurrency must be at least 1")
+    jobs = iter(_collect(document))
+    replacements: dict[str, str] = {}
 
-    async def _one(job: _SectionJob) -> dict[str, str]:
-        visuals = [visual for _picture, visual in job.pictures]
-        async with semaphore:
+    def encode(job: _SectionJob) -> list[tuple[PictureItem, SectionVisual]]:
+        visuals: list[tuple[PictureItem, SectionVisual]] = []
+        for picture in job.pictures:
+            image = picture.get_image(document)
+            if image is None:
+                continue
+            visuals.append(
+                (
+                    picture,
+                    SectionVisual(
+                        visual_id=f"s{job.index}-v{len(visuals)}",
+                        png_bytes=_png_bytes(image),
+                        caption=_caption(picture, document),
+                        page=_page_no(picture),
+                        bbox=format_bbox(picture, document),
+                    ),
+                )
+            )
+        return visuals
+
+    async def worker() -> None:
+        for job in jobs:
+            # Encode only admitted work, off the event loop.
+            encoded = await asyncio.to_thread(encode, job)
+            if not encoded:
+                continue
             try:
                 summaries = await model.describe_section(
                     section_title=job.title,
                     section_text=job.text,
-                    visuals=visuals,
+                    visuals=[visual for _, visual in encoded],
                 )
+                for picture, visual in encoded:
+                    summary = (summaries or {}).get(visual.visual_id, "")
+                    if summary.strip():
+                        replacements[picture.self_ref] = summary_block(
+                            model_name=model_name,
+                            summary=summary,
+                            page=visual.page,
+                            bbox=visual.bbox,
+                        )
             except Exception:
                 logger.warning(
                     "Image summary failed for section %r", job.title, exc_info=True
                 )
-                return {}
-        return summaries or {}
+            finally:
+                del encoded
 
-    results = await asyncio.gather(*[_one(job) for job in jobs])
-    replacements: dict[str, str] = {}
-    for job, summaries in zip(jobs, results, strict=True):
-        for picture, visual in job.pictures:
-            summary = summaries.get(visual.visual_id, "")
-            if not summary or not summary.strip():
-                continue
-            replacements[picture.self_ref] = summary_block(
-                model_name=model_name,
-                summary=summary,
-                page=visual.page,
-                bbox=visual.bbox,
-            )
-    return _clone(document, replacements)
+    await asyncio.gather(*(worker() for _ in range(concurrency)))
+    return await asyncio.to_thread(_clone, document, replacements)

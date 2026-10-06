@@ -81,14 +81,15 @@ def test_preamble_and_nested_headings() -> None:
     assert child_texts(document, "Details") == ["Nested"]
 
 
-def test_multipage_section_waits_for_the_next_heading() -> None:
+def test_multipage_section_flushes_pages_and_preserves_parent_heading() -> None:
     page1 = new_page(1)
     add_heading(page1, 1, "Intro", 1, 30, 40)
     add_text(page1, 1, "right-bottom", 360, 400, 540, 440)
     add_text(page1, 1, "left-bottom", 30, 400, 210, 440)
     assembler = SectionAssembler(name="test")
     assembler.add_page(page1)
-    assert all(item.text != "Intro" for item in assembler.document.texts)
+    assert "Intro" in direct_texts(assembler.document)
+    assert assembler._open == []
 
     page2 = new_page(2)
     add_text(page2, 2, "p2-right", 360, 20, 540, 60)
@@ -101,7 +102,7 @@ def test_multipage_section_waits_for_the_next_heading() -> None:
         "p2-left",
         "p2-right",
     ]
-    assert all(item.text != "Next" for item in assembler.document.texts)
+    assert "Next" in direct_texts(assembler.document)
 
     document = assembler.finish()
     assert "Next" in direct_texts(document)

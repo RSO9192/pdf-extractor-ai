@@ -189,6 +189,8 @@ Pictures whose shorter side is under 80 pixels are omitted during extraction.
 
 ## Development
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ```bash
 uv sync
 uv run ruff format
@@ -204,3 +206,7 @@ uv run --env-file .env pytest
 ```
 
 The rest of the suite does not load Docling weights.
+
+## Performance and bounded processing
+
+The non-OCR CPU pipeline initializes lazily on the first PDF and is reused. Conversion defaults to one page per bounded chunk after larger chunks increased measured peak memory. The existing document API keeps figure images; web-scout can use an internal text-only path. See [the performance report](docs/performance.md) for before/after timings, memory, regression coverage and benchmark commands.

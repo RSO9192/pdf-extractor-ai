@@ -113,7 +113,7 @@ def _is_summary(item: NodeItem) -> bool:
 
 
 def _inside_picture(
-    item: NodeItem, document: DoclingDocument, boxes: list[tuple[int, object]]
+    item: NodeItem, document: DoclingDocument, boxes: dict[int, list[object]]
 ) -> bool:
     if isinstance(item, (SectionHeaderItem, TitleItem, PictureItem)):
         return False
@@ -121,7 +121,7 @@ def _inside_picture(
     if located is None:
         return False
     page_no, bbox = located
-    return any(page == page_no and bbox_contained(bbox, outer) for page, outer in boxes)
+    return any(bbox_contained(bbox, outer) for outer in boxes.get(page_no, []))
 
 
 def to_markdown(document: DoclingDocument) -> str:
@@ -133,7 +133,9 @@ def to_markdown(document: DoclingDocument) -> str:
             image_placeholder=_IMAGE_PLACEHOLDER,
         ),
     )
-    boxes = picture_boxes(document)
+    boxes: dict[int, list[object]] = {}
+    for page_no, bbox in picture_boxes(document):
+        boxes.setdefault(page_no, []).append(bbox)
     state = _PageBannerState()
     parts: list[str] = []
     for item, _level in document.iterate_items(

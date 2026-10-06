@@ -160,6 +160,7 @@ def _crop_region_from_pdf(
     page_no: int,
     bbox: Any,
     doc_page_size: Size | None,
+    render_cache: dict[int, PILImage.Image] | None = None,
 ) -> bytes | None:
     """Crop ``bbox`` (top-left page coords) from a pypdfium2 document."""
     index = page_no - 1
@@ -176,17 +177,30 @@ def _crop_region_from_pdf(
         top = float(bbox.t) * y_scale
         right = float(bbox.r) * x_scale
         bottom = float(bbox.b) * y_scale
-        bitmap = page.render(scale=_CROP_RENDER_SCALE)
-        pil = bitmap.to_pil()
+        pil = render_cache.get(page_no) if render_cache is not None else None
+        owned = pil is None
+        if pil is None:
+            bitmap = page.render(scale=_CROP_RENDER_SCALE)
+            try:
+                pil = bitmap.to_pil().copy()
+            finally:
+                bitmap.close()
+            if render_cache is not None:
+                render_cache[page_no] = pil
         pixel = (
             max(0, int(left * _CROP_RENDER_SCALE)),
             max(0, int(top * _CROP_RENDER_SCALE)),
             min(pil.width, int(right * _CROP_RENDER_SCALE)),
             min(pil.height, int(bottom * _CROP_RENDER_SCALE)),
         )
-        if pixel[2] <= pixel[0] or pixel[3] <= pixel[1]:
-            return None
-        return _png_bytes(pil.crop(pixel))
+        try:
+            if pixel[2] <= pixel[0] or pixel[3] <= pixel[1]:
+                return None
+            with pil.crop(pixel) as crop:
+                return _png_bytes(crop)
+        finally:
+            if owned and render_cache is None:
+                pil.close()
     finally:
         page.close()
 
@@ -195,6 +209,7 @@ def _resolve_picture(
     item: PictureItem,
     document: DoclingDocument,
     pdf: Any | None,
+    render_cache: dict[int, PILImage.Image] | None = None,
 ) -> ImageRef | None:
     png_bytes: bytes | None = None
     located = top_left_bbox(item, document)
@@ -205,6 +220,7 @@ def _resolve_picture(
             page_no=page_no,
             bbox=bbox,
             doc_page_size=_page_size(document, page_no),
+            render_cache=render_cache,
         )
     pil_image: PILImage.Image | None = None
     if png_bytes is None:
@@ -214,6 +230,7 @@ def _resolve_picture(
         return ImageRef.from_pil(pil_image, dpi=72)
     pil_image = PILImage.open(io.BytesIO(png_bytes))
     if not _is_significant(pil_image):
+        pil_image.close()
         return None
     return ImageRef.from_pil(pil_image, dpi=72)
 
@@ -319,6 +336,7 @@ def position_page(
     carry: _Carry | None = None,
     *,
     pdf: Any | None = None,
+    retain_images: bool = True,
 ) -> tuple[list[_Placed], _Carry]:
     """Assign newspaper sort keys. Items without a box keep the previous position."""
     state = carry if carry is not None else _Carry()
@@ -345,6 +363,25 @@ def position_page(
         for page_no, lefts in lefts_by_page.items()
     }
 
+    render_cache: dict[int, PILImage.Image] = {}
+    try:
+        return _position_items(
+            items, document, state, centers_by_page, pdf, retain_images, render_cache
+        )
+    finally:
+        for image in render_cache.values():
+            image.close()
+
+
+def _position_items(
+    items: list[Any],
+    document: DoclingDocument,
+    state: _Carry,
+    centers_by_page: dict[int, list[float]],
+    pdf: Any,
+    retain_images: bool,
+    render_cache: dict[int, PILImage.Image],
+) -> tuple[list[_Placed], _Carry]:
     placed: list[_Placed] = []
     for item, _level in items:
         idx = state.idx
@@ -364,10 +401,27 @@ def position_page(
         if isinstance(item, GroupItem):
             continue
         if isinstance(item, PictureItem):
-            image = _resolve_picture(item, document, pdf)
-            if image is None:
+            if not retain_images:
+                located = top_left_bbox(item, document)
+                if located is not None:
+                    _, bbox = located
+                    if (
+                        min(abs(bbox.r - bbox.l), abs(bbox.b - bbox.t))
+                        * _CROP_RENDER_SCALE
+                        < _MIN_VISUAL_SIDE_PX
+                    ):
+                        continue
+            image = (
+                _resolve_picture(item, document, pdf, render_cache)
+                if retain_images
+                else None
+            )
+            if retain_images and image is None:
                 continue
-            detached = _detach(item)
+            # Do not deep-copy raster payloads that will immediately be replaced.
+            detached = item.model_copy(
+                update={"image": image, "children": [], "captions": []}
+            )
             if isinstance(detached, PictureItem):
                 detached.image = image
             placed.append(_Placed(key, detached, _caption_text(item, document)))
@@ -390,9 +444,17 @@ class SectionAssembler:
         self._open: list[_Placed] = []
         self._stack: list[tuple[int, NodeItem]] = []
 
-    def add_page(self, page_doc: DoclingDocument, *, pdf: Any | None = None) -> None:
+    def add_page(
+        self,
+        page_doc: DoclingDocument,
+        *,
+        pdf: Any | None = None,
+        retain_images: bool = True,
+    ) -> None:
         self._copy_pages(page_doc)
-        placed, self._carry = position_page(page_doc, self._carry, pdf=pdf)
+        placed, self._carry = position_page(
+            page_doc, self._carry, pdf=pdf, retain_images=retain_images
+        )
         ordered = sorted(placed, key=lambda row: row.sort_key)
         for row in ordered:
             if _is_heading(row.item):
@@ -400,6 +462,8 @@ class SectionAssembler:
                 self._open = [row]
             else:
                 self._open.append(row)
+        self._flush(self._open)
+        self._open = []
 
     def finish(self) -> DoclingDocument:
         self._flush(self._open)

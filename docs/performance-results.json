@@ -1,0 +1,235 @@
+{
+  "pdf_before": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "cpu_count": 16,
+    "docling": "2.130.0",
+    "pages": 8,
+    "runs": [
+      {
+        "label": "cold",
+        "seconds": 15.329164208000293,
+        "maxrss": 1954791424,
+        "chars": 17759,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      },
+      {
+        "label": "warm",
+        "seconds": 6.640700999996625,
+        "maxrss": 1999798272,
+        "chars": 17759,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      }
+    ]
+  },
+  "pdf_chunk_1": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "cpu_count": 16,
+    "docling": "2.130.0",
+    "pages": 8,
+    "runs": [
+      {
+        "label": "cold",
+        "seconds": 7.362362915999256,
+        "maxrss": 1906163712,
+        "chars": 17759,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      },
+      {
+        "label": "warm",
+        "seconds": 4.2415929160197265,
+        "maxrss": 1995784192,
+        "chars": 17759,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      }
+    ]
+  },
+  "pdf_chunk_4": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "cpu_count": 16,
+    "docling": "2.130.0",
+    "pages": 8,
+    "runs": [
+      {
+        "label": "cold",
+        "seconds": 7.697713375004241,
+        "maxrss": 2948448256,
+        "chars": 17758,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "af8ed402865ee35d14f65ad6b7beac99d362ee730221c34b796fa335ba2d930d"
+      },
+      {
+        "label": "warm",
+        "seconds": 3.843352416995913,
+        "maxrss": 3104849920,
+        "chars": 17758,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "af8ed402865ee35d14f65ad6b7beac99d362ee730221c34b796fa335ba2d930d"
+      }
+    ]
+  },
+  "pdf_chunk_8": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "cpu_count": 16,
+    "docling": "2.130.0",
+    "pages": 8,
+    "runs": [
+      {
+        "label": "cold",
+        "seconds": 6.440218792005908,
+        "maxrss": 3361816576,
+        "chars": 17758,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "af8ed402865ee35d14f65ad6b7beac99d362ee730221c34b796fa335ba2d930d"
+      },
+      {
+        "label": "warm",
+        "seconds": 3.4474457910109777,
+        "maxrss": 3494690816,
+        "chars": 17758,
+        "pictures": 11,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "af8ed402865ee35d14f65ad6b7beac99d362ee730221c34b796fa335ba2d930d"
+      }
+    ]
+  },
+  "pdf_text_only": {
+    "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+    "cpu_count": 16,
+    "chunk_size": 1,
+    "mode": "text",
+    "workers": 1,
+    "versions": {
+      "docling": "2.130.0",
+      "docling-core": "2.99.0",
+      "torch": "2.14.0",
+      "pillow": "12.3.0",
+      "pypdfium2": "5.13.0"
+    },
+    "runs": [
+      {
+        "phase": "cold",
+        "seconds": 6.665418334014248,
+        "peak_rss_bytes": 1776730112,
+        "child_peak_rss_bytes": 5914624,
+        "chars": 17759,
+        "pictures": 0,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      },
+      {
+        "phase": "warm",
+        "seconds": 2.8371959579817485,
+        "peak_rss_bytes": 1955692544,
+        "child_peak_rss_bytes": 5914624,
+        "chars": 17759,
+        "pictures": 0,
+        "pages": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "sha256": "65e369d8247ed4b8a9f48ef256e8028ef1e659c8658ca3e1304cc531468f987e"
+      }
+    ],
+    "pipeline_initialization_seconds": [
+      3.872476041986374
+    ]
+  }
+}
