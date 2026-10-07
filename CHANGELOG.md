@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-10-07
+
+### Fixed
+
+- Retry failed Docling conversion chunks with the PDFium backend, preserving page order and the existing extraction pipeline. Recoverable PDF rendering failures no longer abort the entire document; failures in both backends still raise an error.
+- Add regression coverage for recovering only the failed page and surfacing unrecoverable conversion errors.
+
 ## [0.2.0] - 2026-10-06
 
 Performance and memory release. Public `PdfExtractor`, `DoclingDocument`, page references, and non-mutating `summarize_images()` contracts stay compatible.
@@ -41,5 +48,6 @@ Initial package release.
 - `to_markdown` with page banners, plus helpers for document title, page slices, low-text checks, and layout spans.
 - Unit tests for reflow, extraction, summaries, and markdown; optional Gemini integration test when `GEMINI_API_KEY` is set.
 
+[0.2.1]: https://github.com/RSO9192/pdf-extractor-ai/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/RSO9192/pdf-extractor-ai/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RSO9192/pdf-extractor-ai/releases/tag/v0.1.0

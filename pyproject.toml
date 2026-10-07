@@ -1,6 +1,6 @@
 [project]
 name = "pdf-extractor-ai"
-version = "0.2.0"
+version = "0.2.1"
 description = "Extract PDF bytes into a Docling document, optionally summarize figures, and serialize to markdown."
 readme = "README.md"
 authors = [
