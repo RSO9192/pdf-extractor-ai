@@ -33,7 +33,7 @@ class _ReusableStream(io.BytesIO):
         super().close()
 
 
-def build_converter(do_ocr: bool) -> Any:
+def build_converter(do_ocr: bool, *, use_pdfium: bool = False) -> Any:
     """Build a Docling converter. Call this inside the worker that will use it."""
     from docling.datamodel.accelerator_options import (
         AcceleratorDevice,
@@ -54,11 +54,12 @@ def build_converter(do_ocr: bool) -> Any:
         images_scale=2.0,
         accelerator_options=AcceleratorOptions(device=AcceleratorDevice.CPU),
     )
-    converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-        }
-    )
+    format_option = PdfFormatOption(pipeline_options=pipeline_options)
+    if use_pdfium:
+        from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+
+        format_option.backend = PyPdfiumDocumentBackend
+    converter = DocumentConverter(format_options={InputFormat.PDF: format_option})
 
     converter.initialize_pipeline(InputFormat.PDF)
     logger.debug(
@@ -260,6 +261,7 @@ class PdfExtractor:
 
 def _convert_pdf(converter: Any, job: _Job) -> Any:
     import pypdfium2 as pdfium
+    from docling.exceptions import ConversionError
     from docling_core.types.io import DocumentStream
 
     try:
@@ -290,13 +292,25 @@ def _convert_pdf(converter: Any, job: _Job) -> Any:
         if not hasattr(converter, "initialize_pipeline"):
             chunk_size = 1
         stream = _ReusableStream(job.pdf_bytes)
+        fallback = None
         try:
             source = DocumentStream(name=job.name, stream=stream)
             for start in range(1, limit + 1, chunk_size):
                 stream.seek(0)
-                result = converter.convert(
-                    source, page_range=(start, min(limit, start + chunk_size - 1))
-                )
+                page_range = (start, min(limit, start + chunk_size - 1))
+                try:
+                    result = converter.convert(source, page_range=page_range)
+                except ConversionError:
+                    logger.warning(
+                        "Retrying PDF chunk with PDFium backend: name=%s pages=%s",
+                        job.name,
+                        page_range,
+                        exc_info=True,
+                    )
+                    if fallback is None:
+                        fallback = build_converter(job.do_ocr, use_pdfium=True)
+                    stream.seek(0)
+                    result = fallback.convert(source, page_range=page_range)
                 try:
                     if job.markdown_only:
                         # Serialize one bounded chunk, retaining only headings for layout.

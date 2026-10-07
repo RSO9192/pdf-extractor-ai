@@ -208,3 +208,55 @@ class _async_extractor:
     async def __aexit__(self, *_args: object) -> None:
         if self._extractor is not None:
             self._extractor.shutdown()
+
+
+def test_conversion_error_retries_only_failed_page_with_pdfium(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from docling.exceptions import ConversionError
+
+    pages = {1: _page(1, "first"), 2: _page(2, "recovered"), 3: _page(3, "last")}
+    primary = _Converter(False, pages)
+    fallback = _Converter(False, pages)
+    original = primary.convert
+
+    def convert(source: object, page_range: tuple[int, int] = (1, 1)) -> _Result:
+        if page_range == (2, 2):
+            primary.calls.append(page_range)
+            raise ConversionError("Page 2 failed to parse")
+        return original(source, page_range)
+
+    primary.convert = convert  # type: ignore[method-assign]
+    fallback_calls: list[tuple[bool, bool]] = []
+
+    def build(do_ocr: bool, *, use_pdfium: bool = False) -> _Converter:
+        fallback_calls.append((do_ocr, use_pdfium))
+        return fallback
+
+    monkeypatch.setattr("pdf_extractor_ai.extractor.build_converter", build)
+    with PdfExtractor(converter_factory=lambda _: primary) as extractor:
+        document = extractor.extract(_pdf(3), name="broken.pdf")
+    assert primary.calls == [(1, 1), (2, 2), (3, 3)]
+    assert fallback.calls == [(2, 2)]
+    assert fallback_calls == [(False, True)]
+    assert [item.text for item in document.texts] == ["first", "recovered", "last"]
+
+
+def test_pdfium_fallback_failure_is_not_silently_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from docling.exceptions import ConversionError
+
+    class BrokenConverter:
+        def convert(self, source: object, page_range: tuple[int, int]) -> _Result:
+            raise ConversionError("Both backends failed")
+
+    monkeypatch.setattr(
+        "pdf_extractor_ai.extractor.build_converter",
+        lambda *args, **kwargs: BrokenConverter(),
+    )
+    with (
+        PdfExtractor(converter_factory=lambda _: BrokenConverter()) as extractor,
+        pytest.raises(ConversionError, match="Both backends failed"),
+    ):
+        extractor.extract(_pdf(1), name="broken.pdf")
