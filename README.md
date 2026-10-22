@@ -30,7 +30,7 @@ uv run python your_script.py
 
 ## Extract a PDF
 
-`extract` returns a `DoclingDocument`. It does not call a vision model and it does not return markdown. `do_ocr` defaults to `False`. Set it to `True` for scanned pages. Tables stay on either way.
+`extract` returns a `DoclingDocument`. It does not call a vision model and it does not return markdown. `do_ocr` defaults to `False`. Pages that look like full-page scans (a bitmap covering most of the page) turn OCR on automatically: full-page OCR, Spanish/English language hints, and table cells take OCR text instead of a bad searchable overlay. Set `do_ocr=True` yourself for other OCR cases. Born-digital tables use `do_cell_matching=False` so TableFormer owns cell text.
 
 ```python
 from pdf_extractor_ai import PdfExtractor, document_title, to_markdown
@@ -205,7 +205,7 @@ uv run pytest
 uv run --env-file .env pytest
 ```
 
-`tests/test_per211232annx1.py` loads Docling weights and parses `tests/test_data/per211232annx1.pdf`. The default suite skips it. Run it with:
+`tests/test_per211232annx1.py` loads Docling weights, auto-OCRs the scanned annex, and writes `tests/test_data/per211232annx1.md`. Needs an OCR engine Docling can select (on macOS, `uv sync --group dev` installs `ocrmac`). The default suite skips it. Run it with:
 
 ```bash
 uv run pytest -m slow

@@ -227,10 +227,12 @@ def test_conversion_error_retries_only_failed_page_with_pdfium(
         return original(source, page_range)
 
     primary.convert = convert  # type: ignore[method-assign]
-    fallback_calls: list[tuple[bool, bool]] = []
+    fallback_calls: list[tuple[bool, bool, bool]] = []
 
-    def build(do_ocr: bool, *, use_pdfium: bool = False) -> _Converter:
-        fallback_calls.append((do_ocr, use_pdfium))
+    def build(
+        do_ocr: bool, *, use_pdfium: bool = False, ocr_tables: bool = False
+    ) -> _Converter:
+        fallback_calls.append((do_ocr, use_pdfium, ocr_tables))
         return fallback
 
     monkeypatch.setattr("pdf_extractor_ai.extractor.build_converter", build)
@@ -238,7 +240,7 @@ def test_conversion_error_retries_only_failed_page_with_pdfium(
         document = extractor.extract(_pdf(3), name="broken.pdf")
     assert primary.calls == [(1, 1), (2, 2), (3, 3)]
     assert fallback.calls == [(2, 2)]
-    assert fallback_calls == [(False, True)]
+    assert fallback_calls == [(False, True, False)]
     assert [item.text for item in document.texts] == ["first", "recovered", "last"]
 
 

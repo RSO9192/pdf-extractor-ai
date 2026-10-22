@@ -156,6 +156,7 @@ def test_default_factory_initializes_cpu_non_ocr_pipeline_once(
     assert len(created[0].initializations) == 1
     assert created[0].options.do_ocr is False
     assert created[0].options.generate_picture_images is False
+    assert created[0].options.table_structure_options.do_cell_matching is False
     assert created[0].options.accelerator_options.device.value == "cpu"
 
 

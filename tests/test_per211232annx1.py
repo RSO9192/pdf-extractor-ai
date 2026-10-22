@@ -7,7 +7,7 @@ from pathlib import Path
 import pypdfium2 as pdfium
 import pytest
 
-from pdf_extractor_ai import PdfExtractor, to_markdown
+from pdf_extractor_ai import PdfExtractor, is_scanned_pdf, to_markdown
 from pdf_extractor_ai.markdown import is_low_text
 
 PDF_PATH = Path(__file__).parent / "test_data" / "per211232annx1.pdf"
@@ -18,6 +18,7 @@ _MIN_TEXT_CHARS = 20_000
 @pytest.mark.slow
 def test_per211232annx1_parses_and_extracts_text() -> None:
     pdf_bytes = PDF_PATH.read_bytes()
+    assert is_scanned_pdf(pdf_bytes, max_pages=5)
     pdf = pdfium.PdfDocument(pdf_bytes)
     try:
         page_count = len(pdf)
@@ -32,3 +33,8 @@ def test_per211232annx1_parses_and_extracts_text() -> None:
     markdown = to_markdown(document)
     MARKDOWN_PATH.write_text(markdown, encoding="utf-8")
     assert not is_low_text(markdown, min_chars=_MIN_TEXT_CHARS)
+    # Full-page OCR should recover Spanish accents from the page image.
+    assert "ACCIÓN" in markdown
+    assert "ACC16N" not in markdown
+    assert "exóticas" in markdown
+    assert markdown.count("exóticas") > markdown.count("ex6ticas")

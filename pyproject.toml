@@ -21,6 +21,7 @@ build-backend = "uv_build"
 dev = [
     "ipykernel>=7.3.0",
     "mypy>=2.3.1",
+    "ocrmac>=1.0.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.16.4",

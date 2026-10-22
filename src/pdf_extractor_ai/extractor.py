@@ -10,8 +10,9 @@ import os
 import queue
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from functools import partial
 from typing import Any, Self, cast
@@ -19,8 +20,48 @@ from typing import Any, Self, cast
 from docling_core.types.doc.document import DoclingDocument
 
 from pdf_extractor_ai.reflow import SectionAssembler
+from pdf_extractor_ai.scanned import is_scanned_pdf
 
 logger = logging.getLogger(__name__)
+
+# Docling table structure prefers PDF word cells over OCR cells. When a scanned
+# page has a bad text overlay, skip those words so TableFormer matches OCR cells.
+# TableFormer may run on a worker thread, so this flag is process-wide (depth
+# counted) rather than thread-local.
+_ignore_pdf_table_words_depth = 0
+_pdf_table_words_patch_lock = threading.Lock()
+_pdf_table_words_patched = False
+
+
+def _install_pdf_table_words_patch() -> None:
+    global _pdf_table_words_patched
+    with _pdf_table_words_patch_lock:
+        if _pdf_table_words_patched:
+            return
+        from docling_core.types.doc.page import SegmentedPdfPage
+
+        original = SegmentedPdfPage.get_cells_in_bbox
+
+        def get_cells_in_bbox(self: Any, *args: Any, **kwargs: Any) -> Any:
+            if _ignore_pdf_table_words_depth > 0:
+                return []
+            return original(self, *args, **kwargs)
+
+        SegmentedPdfPage.get_cells_in_bbox = get_cells_in_bbox  # type: ignore[method-assign]
+        _pdf_table_words_patched = True
+
+
+@contextmanager
+def _prefer_ocr_table_cells() -> Iterator[None]:
+    global _ignore_pdf_table_words_depth
+    _install_pdf_table_words_patch()
+    with _pdf_table_words_patch_lock:
+        _ignore_pdf_table_words_depth += 1
+    try:
+        yield
+    finally:
+        with _pdf_table_words_patch_lock:
+            _ignore_pdf_table_words_depth -= 1
 
 
 class _ReusableStream(io.BytesIO):
@@ -33,17 +74,36 @@ class _ReusableStream(io.BytesIO):
         super().close()
 
 
-def build_converter(do_ocr: bool, *, use_pdfium: bool = False) -> Any:
-    """Build a Docling converter. Call this inside the worker that will use it."""
+def build_converter(
+    do_ocr: bool,
+    *,
+    use_pdfium: bool = False,
+    ocr_tables: bool = False,
+) -> Any:
+    """Build a Docling converter. Call this inside the worker that will use it.
+
+    ``ocr_tables`` enables full-page OCR and makes table cells use OCR text
+    instead of a bad PDF text overlay. Born-digital PDFs keep ``do_cell_matching``
+    off so TableFormer owns cell text.
+    """
     from docling.datamodel.accelerator_options import (
         AcceleratorDevice,
         AcceleratorOptions,
     )
     from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.datamodel.pipeline_options import (
+        OcrAutoOptions,
+        OcrMode,
+        PdfPipelineOptions,
+        TableFormerMode,
+        TableStructureOptions,
+    )
     from docling.document_converter import DocumentConverter, PdfFormatOption
 
     started = time.perf_counter()
+    # Scanned overlays need matching so TableFormer can attach OCR cluster text.
+    # Born-digital PDFs avoid matching; PDF words merged across columns break tables.
+    cell_matching = bool(ocr_tables)
     pipeline_options = PdfPipelineOptions(
         do_ocr=do_ocr,
         do_table_structure=True,
@@ -53,7 +113,16 @@ def build_converter(do_ocr: bool, *, use_pdfium: bool = False) -> Any:
         table_batch_size=4,
         images_scale=2.0,
         accelerator_options=AcceleratorOptions(device=AcceleratorDevice.CPU),
+        table_structure_options=TableStructureOptions(
+            do_cell_matching=cell_matching,
+            mode=TableFormerMode.ACCURATE,
+        ),
     )
+    if do_ocr:
+        pipeline_options.ocr_options = OcrAutoOptions(
+            lang=["iso:es", "iso:en"],
+            mode=OcrMode.FULL_PAGE if ocr_tables else OcrMode.DEFAULT,
+        )
     format_option = PdfFormatOption(pipeline_options=pipeline_options)
     if use_pdfium:
         from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
@@ -63,8 +132,9 @@ def build_converter(do_ocr: bool, *, use_pdfium: bool = False) -> Any:
 
     converter.initialize_pipeline(InputFormat.PDF)
     logger.debug(
-        "[pdf-pipeline-timing] ocr=%s seconds=%.3f",
+        "[pdf-pipeline-timing] ocr=%s ocr_tables=%s seconds=%.3f",
         do_ocr,
+        ocr_tables,
         time.perf_counter() - started,
     )
     return converter
@@ -79,6 +149,7 @@ class _Job:
     future: Future[Any]
     markdown_only: bool = False
     cancelled: threading.Event | None = None
+    ocr_tables: bool = False
 
 
 class PdfExtractor:
@@ -88,10 +159,11 @@ class PdfExtractor:
         self,
         num_workers: int = 1,
         *,
-        converter_factory: Callable[[bool], Any] | None = None,
+        converter_factory: Callable[..., Any] | None = None,
     ) -> None:
         if num_workers < 1:
             raise ValueError("num_workers must be at least 1")
+        self._use_default_factory = converter_factory is None
         self._factory = converter_factory or build_converter
         self._queue: queue.Queue[_Job | None] = queue.Queue(maxsize=4)
         self._admission = threading.Condition()
@@ -226,7 +298,7 @@ class PdfExtractor:
         return future
 
     def _run(self) -> None:
-        converters: dict[bool, Any] = {}
+        converters: dict[tuple[bool, bool], Any] = {}
         while True:
             job = self._queue.get()
             if job is None:
@@ -237,10 +309,26 @@ class PdfExtractor:
                     job.future.cancel()
                 if not job.future.set_running_or_notify_cancel():
                     continue
-                converter = converters.get(job.do_ocr)
+                scanned = False
+                if self._use_default_factory:
+                    scanned = is_scanned_pdf(job.pdf_bytes, max_pages=job.max_pages)
+                do_ocr = job.do_ocr or scanned
+                ocr_tables = scanned
+                if scanned and not job.do_ocr:
+                    logger.info(
+                        "Detected scanned PDF %s; enabling full-page OCR for tables",
+                        job.name,
+                    )
+                job.do_ocr = do_ocr
+                job.ocr_tables = ocr_tables
+                key = (do_ocr, ocr_tables)
+                converter = converters.get(key)
                 if converter is None:
-                    converter = self._factory(job.do_ocr)
-                    converters[job.do_ocr] = converter
+                    if self._use_default_factory:
+                        converter = build_converter(do_ocr, ocr_tables=ocr_tables)
+                    else:
+                        converter = self._factory(do_ocr)
+                    converters[key] = converter
                 job.future.set_result(_convert_pdf(converter, job))
             except Exception as exc:
                 logger.exception("PDF extract failed for %s", job.name)
@@ -299,7 +387,8 @@ def _convert_pdf(converter: Any, job: _Job) -> Any:
                 stream.seek(0)
                 page_range = (start, min(limit, start + chunk_size - 1))
                 try:
-                    result = converter.convert(source, page_range=page_range)
+                    with _prefer_ocr_table_cells() if job.ocr_tables else nullcontext():
+                        result = converter.convert(source, page_range=page_range)
                 except ConversionError:
                     logger.warning(
                         "Retrying PDF chunk with PDFium backend: name=%s pages=%s",
@@ -308,9 +397,14 @@ def _convert_pdf(converter: Any, job: _Job) -> Any:
                         exc_info=True,
                     )
                     if fallback is None:
-                        fallback = build_converter(job.do_ocr, use_pdfium=True)
+                        fallback = build_converter(
+                            job.do_ocr,
+                            use_pdfium=True,
+                            ocr_tables=job.ocr_tables,
+                        )
                     stream.seek(0)
-                    result = fallback.convert(source, page_range=page_range)
+                    with _prefer_ocr_table_cells() if job.ocr_tables else nullcontext():
+                        result = fallback.convert(source, page_range=page_range)
                 try:
                     if job.markdown_only:
                         # Serialize one bounded chunk, retaining only headings for layout.
