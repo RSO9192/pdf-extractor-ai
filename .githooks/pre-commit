@@ -25,4 +25,4 @@ echo "pre-commit: mypy"
 uv run --frozen mypy
 
 echo "pre-commit: pytest (unit tests)"
-uv run --frozen pytest -m "not integration"
+uv run --frozen pytest -m "not integration and not slow"

@@ -14,6 +14,11 @@ from docling_core.types.doc.items.group import GroupItem, ListGroup
 from docling_core.types.doc.items.node import NodeItem
 from docling_core.types.doc.items.picture.picture import PictureItem
 from docling_core.types.doc.items.table.table import TableItem
+from docling_core.types.doc.items.table.table_data import (
+    RichTableCell,
+    TableCell,
+    TableData,
+)
 from docling_core.types.doc.items.text import (
     ListItem,
     SectionHeaderItem,
@@ -239,6 +244,23 @@ def _caption_text(item: PictureItem, document: DoclingDocument) -> str:
     return (item.caption_text(document) or "").strip()
 
 
+def _plain_table_data(data: TableData) -> TableData:
+    """Copy table data without rich-cell refs.
+
+    A rich cell ref addresses the source page. In the assembled document that
+    same ref aliases an earlier item, and Docling rejects the tree.
+    """
+    cells: list[TableCell] = []
+    for cell in data.table_cells:
+        if isinstance(cell, RichTableCell):
+            payload = cell.model_dump()
+            payload.pop("ref", None)
+            cells.append(TableCell.model_validate(payload))
+        else:
+            cells.append(cell.model_copy(deep=True))
+    return data.model_copy(update={"table_cells": cells})
+
+
 def _detach(item: NodeItem) -> NodeItem:
     copied = item.model_copy(deep=True)
     copied.children = []
@@ -313,8 +335,12 @@ def append_item(
             picture.captions.append(cap.get_ref())
         return cast("NodeItem", picture)
     if isinstance(item, TableItem):
-        data = item.data.model_copy(deep=True)
-        return cast("NodeItem", document.add_table(data=data, prov=prov, parent=parent))
+        return cast(
+            "NodeItem",
+            document.add_table(
+                data=_plain_table_data(item.data), prov=prov, parent=parent
+            ),
+        )
     if isinstance(item, TextItem):
         return cast(
             "NodeItem",

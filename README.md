@@ -205,6 +205,12 @@ uv run pytest
 uv run --env-file .env pytest
 ```
 
+`tests/test_per211232annx1.py` loads Docling weights and parses `tests/test_data/per211232annx1.pdf`. The default suite skips it. Run it with:
+
+```bash
+uv run pytest -m slow
+```
+
 The rest of the suite does not load Docling weights.
 
 ## Performance and bounded processing
