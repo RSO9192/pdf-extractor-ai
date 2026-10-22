@@ -16,3 +16,6 @@ wheels/
 .env
 
 **/.DS_Store
+
+# Review copy written by tests/test_per211232annx1.py
+tests/test_data/per211232annx1.md

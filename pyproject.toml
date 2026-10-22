@@ -34,13 +34,14 @@ extend-select = ["I", "ANN"]
 ignore = ["ANN401"]  # Allow explicitly chosen Any as an escape hatch
 
 [tool.pytest.ini_options]
-addopts = "--durations=15"
+addopts = "--durations=15 -m 'not slow'"
 testpaths = ["tests"]
 pythonpath = ["."]
 python_files = ["*.py"]
 asyncio_mode = "auto"
 markers = [
     "integration: tests that call external services",
+    "slow: tests that load Docling weights",
 ]
 
 [tool.mypy]

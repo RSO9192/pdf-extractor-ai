@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from docling_core.types.doc.common.reference import RefItem
 from docling_core.types.doc.items.picture.picture import PictureItem
+from docling_core.types.doc.items.table.table_data import RichTableCell, TableData
 from docling_core.types.doc.items.text import SectionHeaderItem
 from docling_core.types.doc.labels import DocItemLabel
 
+from pdf_extractor_ai.markdown import to_markdown
 from pdf_extractor_ai.reflow import (
     SectionAssembler,
     column_count,
@@ -20,6 +23,7 @@ from tests.support import (
     child_texts,
     direct_texts,
     new_page,
+    provenance,
 )
 
 
@@ -133,6 +137,39 @@ def test_tiny_pictures_are_left_out() -> None:
     document = assemble(page)
     assert document.pictures == []
     assert direct_texts(document) == ["Keep"]
+
+
+def test_rich_table_cell_refs_do_not_alias_earlier_items() -> None:
+    page1 = new_page(1)
+    page1.add_list_item(
+        text="Earlier",
+        marker="-",
+        parent=page1.add_list_group(),
+        prov=provenance(1, 30, 40, 200, 60),
+    )
+    page2 = new_page(2)
+    page2.add_table(
+        data=TableData(
+            num_rows=1,
+            num_cols=1,
+            table_cells=[
+                RichTableCell(
+                    start_row_offset_idx=0,
+                    end_row_offset_idx=1,
+                    start_col_offset_idx=0,
+                    end_col_offset_idx=1,
+                    text="Ficha tecnica del indicador",
+                    ref=RefItem.model_validate({"$ref": "#/groups/0"}),
+                )
+            ],
+        ),
+        prov=provenance(2, 40, 80, 500, 400),
+    )
+    document = assemble(page1, page2)
+    document.validate_tree(document.body, raise_on_error=True)
+    markdown = to_markdown(document)
+    assert "Earlier" in markdown
+    assert "Ficha tecnica del indicador" in markdown
 
 
 def test_significant_pictures_are_kept() -> None:
