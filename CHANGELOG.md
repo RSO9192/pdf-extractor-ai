@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-10-22
+
+### Fixed
+
+- Flatten rich table cell refs when assembling multi-page documents so Docling no longer rejects scanned annexes with `Document hierarchy is inconsistent`.
+- Detect image-backed PDFs and auto-enable full-page OCR so table and body text use the page image instead of a corrupt searchable overlay (for example `ACCIÓN` no longer becomes `ACC16N`).
+
+### Changed
+
+- Born-digital tables use `do_cell_matching=False`; scanned OCR paths keep matching and prefer OCR cells over PDF word cells.
+- Optional slow annex regression test is skipped by default (`pytest -m slow`); pre-commit excludes `slow` tests.
+
 ## [0.2.1] - 2026-10-07
 
 ### Fixed
@@ -48,6 +60,7 @@ Initial package release.
 - `to_markdown` with page banners, plus helpers for document title, page slices, low-text checks, and layout spans.
 - Unit tests for reflow, extraction, summaries, and markdown; optional Gemini integration test when `GEMINI_API_KEY` is set.
 
+[0.2.2]: https://github.com/RSO9192/pdf-extractor-ai/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/RSO9192/pdf-extractor-ai/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/RSO9192/pdf-extractor-ai/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RSO9192/pdf-extractor-ai/releases/tag/v0.1.0
