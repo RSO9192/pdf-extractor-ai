@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from docling_core.transforms.serializer.markdown import (
     MarkdownDocSerializer,
     MarkdownParams,
+    MarkdownTableSerializer,
 )
 from docling_core.types.doc.base import ImageRefMode
 from docling_core.types.doc.document import DoclingDocument
@@ -33,6 +35,8 @@ _PAGE_BANNER_RE = re.compile(
 )
 _ANY_IMAGE_PLACEHOLDER_RE = re.compile(r"<!--\s*(?:image|visual:[^>]+)\s*-->")
 _DEFAULT_MIN_TEXT_CHARS = 200
+_DOT_LEADER_RE = re.compile(r"\.(?:\s*\.){4,}")
+_SPACE_RUN_RE = re.compile(r"[ \t]+")
 
 
 def _page_start_banner(page: int) -> str:
@@ -124,13 +128,62 @@ def _inside_picture(
     return any(bbox_contained(bbox, outer) for outer in boxes.get(page_no, []))
 
 
+def _compact_cell(text: str) -> str:
+    # Only ASCII blanks: non-breaking spaces are digit-group separators in
+    # numbers such as "12\u00a0345,6" and must stay byte-exact.
+    return _SPACE_RUN_RE.sub(" ", _DOT_LEADER_RE.sub(" … ", text)).strip(" \t")
+
+
+def _separator_cell(text: str) -> str:
+    left = ":" if text.startswith(":") else ""
+    right = ":" if text.endswith(":") else ""
+    return f"{left}---{right}"
+
+
+def _compact_table_text(table_text: str) -> str:
+    rows: list[str] = []
+    for index, line in enumerate(table_text.splitlines()):
+        cells = [cell.strip(" \t") for cell in line.split("|")[1:-1]]
+        if index == 1:
+            cells = [_separator_cell(cell) for cell in cells]
+        else:
+            cells = [_compact_cell(cell) for cell in cells]
+        rows.append("| " + " | ".join(cells) + " |")
+    return "\n".join(rows)
+
+
+class _CompactTableSerializer(MarkdownTableSerializer):
+    """Markdown tables without padding, whitespace runs, or dot leaders.
+
+    Docling pads every cell to the widest entry in its column, so a few long
+    cells (for example a table of contents read as a wide table) multiply the
+    size of the whole table.
+    """
+
+    def _compact_table(self, *args: Any, **kwargs: Any) -> str:
+        # Docling calls this private hook as ``_compact_table(table_text)`` on the
+        # bare tabulate output (header, separator, body rows) when
+        # ``compact_tables`` is set. If a Docling release changes the call, use
+        # its own implementation: a failure here would make ``to_markdown`` fall
+        # back to the table's empty ``text`` and drop the table.
+        docling_compact = super()._compact_table
+        if len(args) != 1 or kwargs or not isinstance(args[0], str):
+            return str(docling_compact(*args, **kwargs))
+        try:
+            return _compact_table_text(args[0])
+        except Exception:  # noqa: BLE001 - keep the table via Docling's compaction
+            return str(docling_compact(*args))
+
+
 def to_markdown(document: DoclingDocument) -> str:
     """Walk the document in tree order. Reading order is already fixed."""
     serializer = MarkdownDocSerializer(
         doc=document,
+        table_serializer=_CompactTableSerializer(),
         params=MarkdownParams(
             image_mode=ImageRefMode.PLACEHOLDER,
             image_placeholder=_IMAGE_PLACEHOLDER,
+            compact_tables=True,
         ),
     )
     boxes: dict[int, list[object]] = {}

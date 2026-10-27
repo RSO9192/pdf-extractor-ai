@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Serialize markdown tables compactly: no alignment padding, cell whitespace runs collapsed, and dot leaders (`.....`) collapsed to ` … `. Docling padded every cell to the widest entry in its column, so a table-of-contents page read as a wide table blew the KNBS Economic Survey 2016 (first 50 pages) up to 23.7 million characters; it now converts to about 450,000. Non-table text is unchanged.
+
 ## [0.2.2] - 2026-10-22
 
 ### Fixed
