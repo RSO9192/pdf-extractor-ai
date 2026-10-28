@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-28
+
+### Changed
+
+- `summarize_images` no longer sends pictures that carry no information to the vision model. Pictures smaller than 10,000 pixels are skipped, and the rest are classified with Docling's document figure classifier (`DocumentFigureClassifier-v2.5`); a picture labelled `icon`, `photograph`, `logo`, `bar_code`, `qr_code`, `signature` or `stamp` with confidence 0.6 or higher is skipped. Skipped pictures stay in place as `<!-- image -->`, and a section whose pictures are all skipped makes no call. If the classifier fails, pictures are sent unfiltered. Measured: on a photo-heavy NGO report, vision calls fell from 19 to 5 and cost by 77%; on 128 hand-labelled pictures from a statistics booklet, 63% were skipped and 5 of 33 data-bearing pictures were lost (small stat callouts and one photo-style pie chart); a chart-heavy FAO report was nearly unchanged (25 to 24 calls). Classification takes about 13 ms per picture after a one-off model load of about 7 s per process. Pass `picture_filter=None` to send every picture.
+
+### Added
+
+- `PictureFilter` (configurable `min_pixels`, `skip_classes`, `min_confidence`, `classifier`) and `DEFAULT_PICTURE_FILTER`.
+
 ## [0.2.3] - 2026-10-27
 
 ### Fixed

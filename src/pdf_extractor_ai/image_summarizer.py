@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import threading
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -16,6 +17,11 @@ from docling_core.types.doc.items.text import SectionHeaderItem, TextItem, Title
 from docling_core.types.doc.labels import DocItemLabel
 from PIL import Image as PILImage
 
+from pdf_extractor_ai.picture_filter import (
+    DEFAULT_PICTURE_FILTER,
+    FilterStats,
+    PictureFilter,
+)
 from pdf_extractor_ai.reflow import append_item, format_bbox
 
 logger = logging.getLogger(__name__)
@@ -178,23 +184,32 @@ async def summarize_images(
     *,
     model_name: str,
     concurrency: int = _DEFAULT_CONCURRENCY,
+    picture_filter: PictureFilter | None = DEFAULT_PICTURE_FILTER,
 ) -> DoclingDocument:
     """Return a new document with summarized pictures replaced by text blocks.
 
     The input document is not modified. A missing summary or a model error leaves
-    that picture in place.
+    that picture in place. ``picture_filter`` decides which pictures are worth a
+    model call; skipped pictures are left in place too. ``None`` sends every
+    picture.
     """
     if concurrency < 1:
         raise ValueError("concurrency must be at least 1")
     jobs = iter(_collect(document))
     replacements: dict[str, str] = {}
+    stats = FilterStats()
+    stats_lock = threading.Lock()
 
     def encode(job: _SectionJob) -> list[tuple[PictureItem, SectionVisual]]:
+        cropped = [(picture, picture.get_image(document)) for picture in job.pictures]
+        kept = [(picture, image) for picture, image in cropped if image is not None]
+        if picture_filter is not None and kept:
+            flags, job_stats = picture_filter.select([image for _, image in kept])
+            kept = [pair for pair, flag in zip(kept, flags, strict=True) if flag]
+            with stats_lock:
+                stats.add(job_stats)
         visuals: list[tuple[PictureItem, SectionVisual]] = []
-        for picture in job.pictures:
-            image = picture.get_image(document)
-            if image is None:
-                continue
+        for picture, image in kept:
             visuals.append(
                 (
                     picture,
@@ -238,4 +253,14 @@ async def summarize_images(
                 del encoded
 
     await asyncio.gather(*(worker() for _ in range(concurrency)))
+    if picture_filter is not None:
+        logger.info(
+            "[picture-filter] seen=%d skipped_size=%d skipped_class=%d sent=%d errors=%d classify_s=%.2f",
+            stats.seen,
+            stats.skipped_size,
+            stats.skipped_class,
+            stats.sent,
+            stats.classifier_errors,
+            stats.classify_seconds,
+        )
     return await asyncio.to_thread(_clone, document, replacements)

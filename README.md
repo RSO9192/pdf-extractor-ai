@@ -153,6 +153,8 @@ asyncio.run(main())
 
 A successful summary replaces that picture with a text block. A missing id, an empty summary, or a raised error leaves the picture in place, so `to_markdown` still emits `<!-- image -->` for it.
 
+By default, pictures that carry no information are not sent to your model. A picture smaller than 10,000 pixels is skipped. Otherwise Docling's document figure classifier labels it, and a picture labelled `icon`, `photograph`, `logo`, `bar_code`, `qr_code`, `signature` or `stamp` with confidence 0.6 or higher is skipped. Charts, maps, tables and diagrams are sent. Skipped pictures stay in place like failed ones, and a section whose pictures are all skipped makes no call. The classifier weights download from Hugging Face on first use. If the classifier fails, pictures are sent unfiltered. Pass `picture_filter=PictureFilter(min_pixels=..., skip_classes=..., min_confidence=...)` to change the rule, or `picture_filter=None` to send every picture.
+
 Before a summary, a figure under the heading “Charts” looks like this:
 
 ```text

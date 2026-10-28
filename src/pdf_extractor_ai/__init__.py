@@ -8,10 +8,13 @@ from pdf_extractor_ai.markdown import (
     split_pages,
     to_markdown,
 )
+from pdf_extractor_ai.picture_filter import DEFAULT_PICTURE_FILTER, PictureFilter
 from pdf_extractor_ai.scanned import is_scanned_pdf
 
 __all__ = [
+    "DEFAULT_PICTURE_FILTER",
     "PdfExtractor",
+    "PictureFilter",
     "document_title",
     "is_low_text",
     "is_scanned_pdf",
