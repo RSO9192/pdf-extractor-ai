@@ -125,7 +125,9 @@ async def test_visual_batches_are_bounded_and_input_is_not_modified() -> None:
             active -= 1
             return {v.visual_id: "chart summary" for v in visuals}
 
-    output = await summarize_images(doc, Model(), model_name="test", concurrency=2)
+    output = await summarize_images(
+        doc, Model(), model_name="test", concurrency=2, picture_filter=None
+    )
     assert max(batches) <= 4
     assert peak <= 2
     assert len(doc.pictures) == 11
