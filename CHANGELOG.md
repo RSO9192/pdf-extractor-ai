@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-10-28
+
+### Fixed
+
+- The picture filter builds Docling's figure classifier through Docling's public engine API instead of private attributes of its classifier stage, so a Docling update cannot quietly switch filtering off.
+- A custom `PictureClassifier` that returns the wrong number of labels no longer fails the document; its pictures are sent unfiltered, like any other classifier failure.
+- When the classifier fails, the one-time warning now says plainly that the picture filter is off and every picture (including icons, photos and logos) is sent to the vision model.
+
 ## [0.3.0] - 2026-10-28
 
 ### Changed
