@@ -45,17 +45,17 @@ class DoclingPictureClassifier:
             return self._predict(images)
 
     def _predict(self, images: list[PILImage.Image]) -> list[tuple[str, float]]:
-        from docling.models.inference_engines.image_classification.base import (
+        from docling.models.inference_engines.image_classification import (
             ImageClassificationEngineInput,
         )
 
-        model = self._load()
-        outputs = model.engine.predict_batch(
+        engine, labels = self._load()
+        outputs = engine.predict_batch(
             [ImageClassificationEngineInput(image=image.convert("RGB")) for image in images]
         )
-        return [(model._classes[out.label_ids[0]], float(out.scores[0])) for out in outputs]
+        return [(labels[out.label_ids[0]], float(out.scores[0])) for out in outputs]
 
-    def _load(self) -> Any:
+    def _load(self) -> tuple[Any, dict[int, str]]:
         # A failed load is remembered so an unreachable hub is not retried for every section.
         if self._load_error is not None:
             raise RuntimeError("picture classifier unavailable") from self._load_error
@@ -69,21 +69,24 @@ class DoclingPictureClassifier:
             logger.debug("[picture-filter] classifier loaded in %.2fs", time.perf_counter() - started)
         return self._model
 
-    def _build(self) -> Any:
+    def _build(self) -> tuple[Any, dict[int, str]]:
+        # Docling's public engine API; the classifier stage keeps its engine and labels private.
         from docling.datamodel.accelerator_options import AcceleratorOptions
         from docling.datamodel.picture_classification_options import (
             DocumentPictureClassifierOptions,
         )
-        from docling.models.stages.picture_classifier.document_picture_classifier import (
-            DocumentPictureClassifier,
+        from docling.models.inference_engines.image_classification import (
+            create_image_classification_engine,
         )
 
-        return DocumentPictureClassifier(
-            enabled=True,
-            artifacts_path=None,
-            options=DocumentPictureClassifierOptions.from_preset("document_figure_classifier_v2"),
+        options = DocumentPictureClassifierOptions.from_preset("document_figure_classifier_v2")
+        engine = create_image_classification_engine(
+            options=options.engine_options,
+            model_spec=options.model_spec,
             accelerator_options=AcceleratorOptions(),
         )
+        engine.initialize()
+        return engine, engine.get_label_mapping()
 
 
 _DEFAULT_CLASSIFIER = DoclingPictureClassifier()
@@ -131,6 +134,8 @@ class PictureFilter:
             started = time.perf_counter()
             try:
                 labels = classifier.classify([images[index] for index in candidates])
+                if len(labels) != len(candidates):
+                    raise ValueError(f"classifier returned {len(labels)} labels for {len(candidates)} pictures")
             except Exception:
                 # Warn once per process; a broken classifier would otherwise log on every section.
                 global _warned_failure
@@ -138,7 +143,11 @@ class PictureFilter:
                     logger.debug("Picture classification failed; sending pictures unfiltered", exc_info=True)
                 else:
                     _warned_failure = True
-                    logger.warning("Picture classification failed; sending pictures unfiltered", exc_info=True)
+                    logger.warning(
+                        "Picture filter is off: the image classifier failed, so every picture "
+                        "(including icons, photos and logos) is sent to the vision model",
+                        exc_info=True,
+                    )
                 stats.classifier_errors += 1
             else:
                 for index, (name, confidence) in zip(candidates, labels, strict=True):

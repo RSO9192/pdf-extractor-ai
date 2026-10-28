@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import time
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
@@ -146,4 +147,54 @@ def test_classifier_failure_warns_once(
         for _ in range(3):
             keep, _ = picture_filter.select([_img()])
             assert keep == [True]
-    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "picture filter is off" in warnings[0].getMessage().lower()
+    assert "every picture" in warnings[0].getMessage().lower()
+
+
+class _WrongCountClassifier:
+    def classify(self, images: list[Image.Image]) -> list[tuple[str, float]]:
+        return [("bar_chart", 0.9)]
+
+
+def test_wrong_label_count_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("pdf_extractor_ai.picture_filter._warned_failure", False)
+    keep, stats = PictureFilter(classifier=_WrongCountClassifier()).select([_img(), _img()])
+    assert keep == [True, True]
+    assert stats.classifier_errors == 1
+
+
+def test_docling_classifier_uses_public_engine_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Engine:
+        def initialize(self) -> None:
+            pass
+
+        def get_label_mapping(self) -> dict[int, str]:
+            return {0: "logo", 1: "bar_chart"}
+
+        def predict_batch(self, inputs: list[object]) -> list[SimpleNamespace]:
+            return [SimpleNamespace(label_ids=[1, 0], scores=[0.9, 0.1]) for _ in inputs]
+
+    created: list[dict[str, object]] = []
+
+    def _factory(**kwargs: object) -> _Engine:
+        created.append(kwargs)
+        return _Engine()
+
+    monkeypatch.setattr(
+        "docling.models.inference_engines.image_classification.create_image_classification_engine",
+        _factory,
+    )
+
+    def _no_stage(*args: object, **kwargs: object) -> None:
+        raise AssertionError("must not depend on DocumentPictureClassifier internals")
+
+    monkeypatch.setattr(
+        "docling.models.stages.picture_classifier.document_picture_classifier.DocumentPictureClassifier",
+        _no_stage,
+    )
+    classifier = DoclingPictureClassifier()
+    assert classifier.classify([_img(), _img()]) == [("bar_chart", 0.9), ("bar_chart", 0.9)]
+    assert classifier.classify([_img()]) == [("bar_chart", 0.9)]
+    assert len(created) == 1
