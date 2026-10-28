@@ -119,3 +119,31 @@ def test_docling_classifier_handles_non_rgb() -> None:
     )
     assert len(out) == 4
     assert all(isinstance(name, str) and 0 <= score <= 1 for name, score in out)
+
+
+def test_failed_classifier_load_is_attempted_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts = 0
+
+    def _broken_build(self: DoclingPictureClassifier) -> object:
+        nonlocal attempts
+        attempts += 1
+        raise OSError("hub unreachable")
+
+    monkeypatch.setattr(DoclingPictureClassifier, "_build", _broken_build)
+    classifier = DoclingPictureClassifier()
+    for _ in range(3):
+        with pytest.raises(RuntimeError):
+            classifier.classify([_img()])
+    assert attempts == 1
+
+
+def test_classifier_failure_warns_once(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    monkeypatch.setattr("pdf_extractor_ai.picture_filter._warned_failure", False)
+    picture_filter = PictureFilter(classifier=_StubClassifier(fail=True))
+    with caplog.at_level("WARNING", logger="pdf_extractor_ai.picture_filter"):
+        for _ in range(3):
+            keep, _ = picture_filter.select([_img()])
+            assert keep == [True]
+    assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 1
