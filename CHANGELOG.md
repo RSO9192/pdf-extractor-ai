@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-11-11
+
+### Fixed
+
+- Require `docling>=2.150.0` and `docling-parse>=7.25.0`. docling-parse 7.25.0 ships an updated Blend2D and no longer segfaults while parsing some PDFs (for example the scanned Kenya report in [#4](https://github.com/RSO9192/pdf-extractor-ai/issues/4)). A slow regression test covers that document.
+
 ## [0.3.1] - 2026-10-28
 
 ### Fixed
