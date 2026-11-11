@@ -8,7 +8,8 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "docling>=2.130.0",
+    "docling>=2.150.0",
+    "docling-parse>=7.25.0",
     "pillow>=12.3.0",
     "pypdfium2>=5.13.0",
 ]
