@@ -37,7 +37,7 @@ class DoclingPictureClassifier:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._model: Any = None
+        self._model: tuple[Any, dict[int, str]] | None = None
         self._load_error: Exception | None = None
 
     def classify(self, images: list[PILImage.Image]) -> list[tuple[str, float]]:
@@ -51,7 +51,10 @@ class DoclingPictureClassifier:
 
         engine, labels = self._load()
         outputs = engine.predict_batch(
-            [ImageClassificationEngineInput(image=image.convert("RGB")) for image in images]
+            [
+                ImageClassificationEngineInput(image=image.convert("RGB"))
+                for image in images
+            ]
         )
         return [(labels[out.label_ids[0]], float(out.scores[0])) for out in outputs]
 
@@ -59,15 +62,20 @@ class DoclingPictureClassifier:
         # A failed load is remembered so an unreachable hub is not retried for every section.
         if self._load_error is not None:
             raise RuntimeError("picture classifier unavailable") from self._load_error
-        if self._model is None:
+        model = self._model
+        if model is None:
             started = time.perf_counter()
             try:
-                self._model = self._build()
+                model = self._build()
             except Exception as exc:
                 self._load_error = exc
                 raise RuntimeError("picture classifier unavailable") from exc
-            logger.debug("[picture-filter] classifier loaded in %.2fs", time.perf_counter() - started)
-        return self._model
+            self._model = model
+            logger.debug(
+                "[picture-filter] classifier loaded in %.2fs",
+                time.perf_counter() - started,
+            )
+        return model
 
     def _build(self) -> tuple[Any, dict[int, str]]:
         # Docling's public engine API; the classifier stage keeps its engine and labels private.
@@ -79,7 +87,9 @@ class DoclingPictureClassifier:
             create_image_classification_engine,
         )
 
-        options = DocumentPictureClassifierOptions.from_preset("document_figure_classifier_v2")
+        options = DocumentPictureClassifierOptions.from_preset(
+            "document_figure_classifier_v2"
+        )
         engine = create_image_classification_engine(
             options=options.engine_options,
             model_spec=options.model_spec,
@@ -135,12 +145,17 @@ class PictureFilter:
             try:
                 labels = classifier.classify([images[index] for index in candidates])
                 if len(labels) != len(candidates):
-                    raise ValueError(f"classifier returned {len(labels)} labels for {len(candidates)} pictures")
+                    raise ValueError(
+                        f"classifier returned {len(labels)} labels for {len(candidates)} pictures"
+                    )
             except Exception:
                 # Warn once per process; a broken classifier would otherwise log on every section.
                 global _warned_failure
                 if _warned_failure:
-                    logger.debug("Picture classification failed; sending pictures unfiltered", exc_info=True)
+                    logger.debug(
+                        "Picture classification failed; sending pictures unfiltered",
+                        exc_info=True,
+                    )
                 else:
                     _warned_failure = True
                     logger.warning(

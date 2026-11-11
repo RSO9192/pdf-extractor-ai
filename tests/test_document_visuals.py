@@ -15,7 +15,9 @@ from tests.support import add_heading, add_picture, add_text, assemble, new_page
 class _WidthClassifier:
     """Classify test pictures by width so one document can mix kinds."""
 
-    def __init__(self, by_width: dict[int, str] | None = None, *, fail: bool = False) -> None:
+    def __init__(
+        self, by_width: dict[int, str] | None = None, *, fail: bool = False
+    ) -> None:
         self.by_width = by_width or {}
         self.fail = fail
 
@@ -105,7 +107,10 @@ async def test_summarize_skips_sections_without_pictures() -> None:
     add_text(page, 1, "Plain text only.", 30, 60, 210, 90)
     model = _SilentModel()
     result = await summarize_images(
-        assemble(page), model, model_name="gemini/gemini-3.7-flash", picture_filter=_CHART_FILTER
+        assemble(page),
+        model,
+        model_name="gemini/gemini-3.7-flash",
+        picture_filter=_CHART_FILTER,
     )
     assert model.calls == 0
     assert "Plain text only." in to_markdown(result)
@@ -115,7 +120,10 @@ async def test_summarize_skips_sections_without_pictures() -> None:
 async def test_summarize_leaves_picture_when_model_fails() -> None:
     source = _chart_document()
     result = await summarize_images(
-        source, _FailModel(), model_name="gemini/gemini-3.7-flash", picture_filter=_CHART_FILTER
+        source,
+        _FailModel(),
+        model_name="gemini/gemini-3.7-flash",
+        picture_filter=_CHART_FILTER,
     )
     assert result.pictures
     markdown = to_markdown(result)
@@ -128,7 +136,10 @@ async def test_summarize_replaces_picture_before_markdown() -> None:
     source = _chart_document()
     model = _OkModel()
     result = await summarize_images(
-        source, model, model_name="gemini/gemini-3.7-flash", picture_filter=_CHART_FILTER
+        source,
+        model,
+        model_name="gemini/gemini-3.7-flash",
+        picture_filter=_CHART_FILTER,
     )
     assert result is not source
     assert source.pictures
@@ -169,7 +180,10 @@ async def test_summarize_all_skipped_section_makes_no_call() -> None:
     model = _RecordingModel()
     picture_filter = PictureFilter(classifier=_WidthClassifier({200: "icon"}))
     result = await summarize_images(
-        _section_with((200, 100), (200, 100)), model, model_name="m", picture_filter=picture_filter
+        _section_with((200, 100), (200, 100)),
+        model,
+        model_name="m",
+        picture_filter=picture_filter,
     )
     assert model.calls == 0
     assert len(result.pictures) == 2
@@ -195,7 +209,9 @@ async def test_summarize_mixed_section_ids_contiguous() -> None:
 @pytest.mark.asyncio
 async def test_summarize_filter_disabled_sends_all() -> None:
     model = _RecordingModel()
-    await summarize_images(_section_with((200, 100)), model, model_name="m", picture_filter=None)
+    await summarize_images(
+        _section_with((200, 100)), model, model_name="m", picture_filter=None
+    )
     assert model.calls == 1
 
 

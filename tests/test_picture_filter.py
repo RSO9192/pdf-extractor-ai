@@ -17,7 +17,9 @@ from pdf_extractor_ai.picture_filter import (
 
 
 class _StubClassifier:
-    def __init__(self, results: list[tuple[str, float]] | None = None, *, fail: bool = False) -> None:
+    def __init__(
+        self, results: list[tuple[str, float]] | None = None, *, fail: bool = False
+    ) -> None:
         self.results = results or []
         self.fail = fail
         self.calls = 0
@@ -49,18 +51,24 @@ def test_small_image_skipped_without_classifying() -> None:
 
 
 def test_skip_class_above_confidence_dropped() -> None:
-    keep, stats = PictureFilter(classifier=_StubClassifier([("photograph", 0.6)])).select([_img()])
+    keep, stats = PictureFilter(
+        classifier=_StubClassifier([("photograph", 0.6)])
+    ).select([_img()])
     assert keep == [False]
     assert stats.skipped_class == 1
 
 
 def test_skip_class_below_confidence_kept() -> None:
-    keep, _ = PictureFilter(classifier=_StubClassifier([("logo", 0.59)])).select([_img()])
+    keep, _ = PictureFilter(classifier=_StubClassifier([("logo", 0.59)])).select(
+        [_img()]
+    )
     assert keep == [True]
 
 
 def test_chart_class_kept() -> None:
-    keep, _ = PictureFilter(classifier=_StubClassifier([("bar_chart", 0.99)])).select([_img()])
+    keep, _ = PictureFilter(classifier=_StubClassifier([("bar_chart", 0.99)])).select(
+        [_img()]
+    )
     assert keep == [True]
 
 
@@ -74,7 +82,9 @@ def test_custom_skip_classes_respected() -> None:
 
 
 def test_classifier_error_keeps_picture() -> None:
-    keep, stats = PictureFilter(classifier=_StubClassifier(fail=True)).select([_img(), _img(10, 10)])
+    keep, stats = PictureFilter(classifier=_StubClassifier(fail=True)).select(
+        [_img(), _img(10, 10)]
+    )
     assert keep == [True, False]
     assert stats.classifier_errors == 1
     assert stats.sent == 1
@@ -84,16 +94,25 @@ def test_stats_counts() -> None:
     stub = _StubClassifier([("photograph", 0.9), ("line_chart", 0.9)])
     keep, stats = PictureFilter(classifier=stub).select([_img(50, 50), _img(), _img()])
     assert keep == [False, False, True]
-    assert (stats.seen, stats.skipped_size, stats.skipped_class, stats.sent) == (3, 1, 1, 1)
+    assert (stats.seen, stats.skipped_size, stats.skipped_class, stats.sent) == (
+        3,
+        1,
+        1,
+        1,
+    )
     assert stub.calls == 1
 
 
-def test_default_classifier_calls_are_serialized(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_classifier_calls_are_serialized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     active = 0
     max_active = 0
     guard = threading.Lock()
 
-    def _slow_predict(self: DoclingPictureClassifier, images: list[Image.Image]) -> list[tuple[str, float]]:
+    def _slow_predict(
+        self: DoclingPictureClassifier, images: list[Image.Image]
+    ) -> list[tuple[str, float]]:
         nonlocal active, max_active
         with guard:
             active += 1
@@ -105,7 +124,9 @@ def test_default_classifier_calls_are_serialized(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(DoclingPictureClassifier, "_predict", _slow_predict)
     classifier = DoclingPictureClassifier()
-    threads = [threading.Thread(target=classifier.classify, args=([_img()],)) for _ in range(3)]
+    threads = [
+        threading.Thread(target=classifier.classify, args=([_img()],)) for _ in range(3)
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -122,7 +143,9 @@ def test_docling_classifier_handles_non_rgb() -> None:
     assert all(isinstance(name, str) and 0 <= score <= 1 for name, score in out)
 
 
-def test_failed_classifier_load_is_attempted_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_failed_classifier_load_is_attempted_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     attempts = 0
 
     def _broken_build(self: DoclingPictureClassifier) -> object:
@@ -160,12 +183,16 @@ class _WrongCountClassifier:
 
 def test_wrong_label_count_fails_open(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("pdf_extractor_ai.picture_filter._warned_failure", False)
-    keep, stats = PictureFilter(classifier=_WrongCountClassifier()).select([_img(), _img()])
+    keep, stats = PictureFilter(classifier=_WrongCountClassifier()).select(
+        [_img(), _img()]
+    )
     assert keep == [True, True]
     assert stats.classifier_errors == 1
 
 
-def test_docling_classifier_uses_public_engine_api(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_docling_classifier_uses_public_engine_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _Engine:
         def initialize(self) -> None:
             pass
@@ -174,7 +201,9 @@ def test_docling_classifier_uses_public_engine_api(monkeypatch: pytest.MonkeyPat
             return {0: "logo", 1: "bar_chart"}
 
         def predict_batch(self, inputs: list[object]) -> list[SimpleNamespace]:
-            return [SimpleNamespace(label_ids=[1, 0], scores=[0.9, 0.1]) for _ in inputs]
+            return [
+                SimpleNamespace(label_ids=[1, 0], scores=[0.9, 0.1]) for _ in inputs
+            ]
 
     created: list[dict[str, object]] = []
 
@@ -195,6 +224,9 @@ def test_docling_classifier_uses_public_engine_api(monkeypatch: pytest.MonkeyPat
         _no_stage,
     )
     classifier = DoclingPictureClassifier()
-    assert classifier.classify([_img(), _img()]) == [("bar_chart", 0.9), ("bar_chart", 0.9)]
+    assert classifier.classify([_img(), _img()]) == [
+        ("bar_chart", 0.9),
+        ("bar_chart", 0.9),
+    ]
     assert classifier.classify([_img()]) == [("bar_chart", 0.9)]
     assert len(created) == 1

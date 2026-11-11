@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from docling_core.transforms.serializer.markdown import (
     MarkdownDocSerializer,
@@ -160,19 +161,22 @@ class _CompactTableSerializer(MarkdownTableSerializer):
     size of the whole table.
     """
 
-    def _compact_table(self, *args: Any, **kwargs: Any) -> str:
+    @staticmethod
+    def _compact_table(table_text: str, *args: Any, **kwargs: Any) -> str:
         # Docling calls this private hook as ``_compact_table(table_text)`` on the
         # bare tabulate output (header, separator, body rows) when
         # ``compact_tables`` is set. If a Docling release changes the call, use
         # its own implementation: a failure here would make ``to_markdown`` fall
         # back to the table's empty ``text`` and drop the table.
-        docling_compact = super()._compact_table
-        if len(args) != 1 or kwargs or not isinstance(args[0], str):
-            return str(docling_compact(*args, **kwargs))
+        docling_compact = cast(
+            "Callable[..., str]", MarkdownTableSerializer._compact_table
+        )
+        if args or kwargs or not isinstance(table_text, str):
+            return str(docling_compact(table_text, *args, **kwargs))
         try:
-            return _compact_table_text(args[0])
+            return _compact_table_text(table_text)
         except Exception:  # noqa: BLE001 - keep the table via Docling's compaction
-            return str(docling_compact(*args))
+            return str(docling_compact(table_text))
 
 
 def to_markdown(document: DoclingDocument) -> str:
