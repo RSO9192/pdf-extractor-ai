@@ -1,15 +1,19 @@
 """Download the weights a container needs before Hugging Face goes offline.
 
+Installed with the package. Run ``pdf_extractor_download_models`` after ``pdf-extractor-ai``
+is installed, while the network is still available, and before setting
+``HF_HUB_OFFLINE``.
+
 Pinned for the Docling version in ``uv.lock`` (2.150.0) and RapidOCR 3.10.0.
 Docling 2.150.1 requests the same Hugging Face revisions. When either version
 changes, replace the constants below with the revisions that release passes to
 ``snapshot_download`` and the RapidOCR ONNX files it selects. The README
 section "Model weights" is the checklist for that update.
 
-Run this while the network is available. ``snapshot_download`` has to use the
-same revision string Docling uses later, or an ``HF_HUB_OFFLINE`` lookup misses
-the cache. RapidOCR is not a Hugging Face repo; its files go into the package
-``models`` directory RapidOCR reads on the first scanned PDF.
+``snapshot_download`` has to use the same revision string Docling uses later,
+or an ``HF_HUB_OFFLINE`` lookup misses the cache. RapidOCR is not a Hugging
+Face repo; its files go into the package ``models`` directory RapidOCR reads
+on the first scanned PDF.
 """
 
 from __future__ import annotations
@@ -68,7 +72,7 @@ class _Download:
 def _hub_is_offline() -> bool:
     # huggingface_hub treats either variable as offline, read at import.
     value = os.environ.get("HF_HUB_OFFLINE") or os.environ.get("TRANSFORMERS_OFFLINE")
-    return bool(value) and value.upper() in _OFFLINE_TRUE
+    return value is not None and value.upper() in _OFFLINE_TRUE
 
 
 def _sha256(path: Path) -> str:
@@ -112,7 +116,7 @@ def _download_rapidocr(item: _Download, dest: Path) -> None:
 def main() -> None:
     if _hub_is_offline():
         raise SystemExit(
-            "HF_HUB_OFFLINE or TRANSFORMERS_OFFLINE is set. Run download_models "
+            "HF_HUB_OFFLINE or TRANSFORMERS_OFFLINE is set. Run pdf_extractor_download_models "
             "earlier in the image build, while snapshot_download can still reach "
             "Hugging Face. Set offline mode only after this script finishes."
         )

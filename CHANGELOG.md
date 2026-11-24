@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `scripts/download_models.py` downloads the Docling and RapidOCR weights a container needs before `HF_HUB_OFFLINE` is set. The README records the pinned model revisions and says to update that script when the Docling version changes.
+- The `pdf_extractor_download_models` command downloads the Docling and RapidOCR weights a container needs before `HF_HUB_OFFLINE` is set. It is installed with the package. The README records the pinned model revisions and says to update `src/pdf_extractor_ai/download_models.py` when the Docling version changes.
 
 ## [0.3.2] - 2026-11-11
 
