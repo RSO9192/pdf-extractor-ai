@@ -189,6 +189,32 @@ Cereal production rises through 2026.
 
 Pictures whose shorter side is under 80 pixels are omitted during extraction.
 
+## Model weights
+
+A container that sets `HF_HUB_OFFLINE` has to fetch weights while the network is still available. During the image build, after dependencies are installed and before that variable is set, run:
+
+```bash
+uv run python scripts/download_models.py
+```
+
+`snapshot_download` fills the Hugging Face cache. The revision argument has to be the same string Docling passes later. An offline lookup misses the cache when those strings differ. RapidOCR is not a Hugging Face repo, so `HF_HUB_OFFLINE` does not cover it. The script writes its ONNX files into RapidOCR's package `models` directory, which is where RapidOCR looks on the first scanned PDF.
+
+The pins live in `scripts/download_models.py`. They match the Docling version in `uv.lock` (2.150.0) and RapidOCR 3.10.0. Docling 2.150.1 requests the same three repositories and revisions. When you change the Docling version, update those pins in the script to the revisions that version requests. Reading them from the installed package:
+
+- Layout. Preset `layout_heron_default`, Transformers engine. `docling.datamodel.stage_model_specs` names `docling-project/docling-layout-heron` at revision `main`. Use that repo. The ONNX engine override is a different repository, and this package uses the Transformers engine.
+- TableFormer. `extract()` sets `TableFormerMode.ACCURATE`. `TableStructureModel.download_models` names `docling-project/docling-models` at revision `v2.3.0`. Download the whole repo. The accurate weights are `model_artifacts/tableformer/accurate` inside it. Layout and TableFormer load on the first `extract()` call.
+- Picture classifier. Preset `document_figure_classifier_v2`. `DocumentPictureClassifierOptions.from_preset` names `docling-project/DocumentFigureClassifier-v2.5` at revision `main`. The default picture filter loads it when a picture has at least 10,000 pixels. `extract()` does not load it, and the PDF pipeline's `do_picture_classification` stays off.
+
+RapidOCR, from that release's `default_models.yaml` (`onnxruntime`). On Linux, with `rapidocr` and `onnxruntime` installed, `OcrAutoOptions` selects this engine. `extract()` builds that converter for `do_ocr=True` or a scanned PDF. Docling asks for Spanish first (`iso:es`) and uses that language only, because RapidOCR takes one language. Spanish and English share the PP-OCRv6 small checkpoints:
+
+- `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx`
+- `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx`
+- `https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx`
+
+When the RapidOCR version changes, replace those three URLs and their SHA-256 hashes in the script with the files the new release selects for that language.
+
+`docling-parse` and `pypdfium2` ship their binaries. Code and formula enrichment stay off, so `docling-project/CodeFormulaV2` stays out of the script.
+
 ## Development
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
